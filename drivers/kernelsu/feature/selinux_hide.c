@@ -308,13 +308,12 @@ static __nocfi ssize_t ksu_sel_write(struct file *file, const char __user *ubuf,
         goto passthrough;
     kbuf[len] = 0;
 
-    if (ino == KSU_SEL_CONTEXT_INO) {
-        if (ksu_should_hide_context(kbuf)) {
-            pr_info_ratelimited("selinux_hide: blocked context: %.40s\n", kbuf);
-            return -EINVAL;
-        }
+    /* Both selinuxfs oracles must reject contexts hidden from applications. */
+    if (ksu_should_hide_context(kbuf))
+        return -EINVAL;
+
+    if (ino == KSU_SEL_CONTEXT_INO)
         goto passthrough;
-    }
 
     ret = orig_sel_write(file, ubuf, size, pos);
     if (ret <= 0)
@@ -324,9 +323,6 @@ static __nocfi ssize_t ksu_sel_write(struct file *file, const char __user *ubuf,
         bool deny = false;
         char scon[128], tcon[128];
         unsigned int tclass_num;
-
-        if (ksu_should_hide_context(kbuf))
-            deny = true;
 
         if (sscanf(kbuf, "%127s %127s %u", scon, tcon, &tclass_num) == 3 &&
             ksu_is_dirty_access_query(scon, tcon))
@@ -526,6 +522,9 @@ static int ksu_selinux_hide_init_thread(void *data)
     ksu_selinux_hide_add_type("xposed_data");
     ksu_selinux_hide_add_type("msd_app");
     ksu_selinux_hide_add_type("msd_daemon");
+    ksu_selinux_hide_add_type("adbroot");
+    ksu_selinux_hide_add_type("adbroot_exec");
+    ksu_selinux_hide_add_type("adbroot_data_file");
 
 try_again:
     if (ksu_prepare_fake_status_page()) {
