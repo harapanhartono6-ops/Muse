@@ -167,20 +167,35 @@ done
 
 # =====================[ COMPILING ]=====================
 
+MAKE_ARGS=(
+  O=$OUT_DIR
+  ARCH=arm64
+  LLVM=1
+  LLVM_IAS=1
+  CC=clang
+  LD=ld.lld
+  AR=llvm-ar
+  NM=llvm-nm
+  OBJCOPY=llvm-objcopy
+  OBJDUMP=llvm-objdump
+  STRIP=llvm-strip
+  CLANG_TRIPLE=$CLANG_TRIPLE
+  CROSS_COMPILE=$CROSS_COMPILE
+)
+
+# BakaSU embeds a preinit runner built against the installed UAPI headers; its
+# own nested headers_install breaks under the make jobserver, which silently
+# disables preinit. Its core/init.c also includes generated/compile.h, which
+# init/ produces in parallel with drivers/. Generate both up front.
+echo -e "\n🧩 \033[1;36mPreparing BakaSU build inputs (UAPI headers, compile.h)...\033[0m"
+make -j"$JOBS" "${MAKE_ARGS[@]}" headers_install init/ > "$OUT_DIR/prebuild.log" 2>&1 || {
+  tail -n 40 "$OUT_DIR/prebuild.log"
+  echo -e "\n❌ \033[1;31mBakaSU pre-build step failed (see $OUT_DIR/prebuild.log).\033[0m"
+  exit 1
+}
+
 echo -e "\n🚀 \033[1;35mStarting compilation...\033[0m"
-make -j"$JOBS" O=$OUT_DIR \
-  ARCH=arm64 \
-  LLVM=1 \
-  LLVM_IAS=1 \
-  CC=clang \
-  LD=ld.lld \
-  AR=llvm-ar \
-  NM=llvm-nm \
-  OBJCOPY=llvm-objcopy \
-  OBJDUMP=llvm-objdump \
-  STRIP=llvm-strip \
-  CLANG_TRIPLE=$CLANG_TRIPLE \
-  CROSS_COMPILE=$CROSS_COMPILE \
+make -j"$JOBS" "${MAKE_ARGS[@]}" \
   2>&1 | tee out/build.log | grep --line-buffered -E \
   "warning:|error:|fatal:|Killed|No space left|Segmentation fault|clang:.*(unable|crash)|make(\[[0-9]+\])?: \*\*\*" | sed \
   -e 's/warning:/\x1b[1;33mwarning:\x1b[0m/g' \
@@ -207,6 +222,10 @@ echo -e "\n✅ \033[1;32mKernel image compiled successfully.\033[0m"
 BAKASU_KERNEL_VERSION=$(grep -oE -- '-- BakaSU version code: [0-9]+' "$OUT_DIR/build.log" | grep -oE '[0-9]+$' | tail -n1)
 if [ -z "$BAKASU_KERNEL_VERSION" ]; then
   echo -e "\n❌ \033[1;31mBakaSU was not built into the kernel (no version code in build.log).\033[0m"
+  exit 1
+fi
+if grep -q -- '-- BakaSU: .* not found, preinit disabled' "$OUT_DIR/build.log"; then
+  echo -e "\n❌ \033[1;31mBakaSU preinit was disabled (UAPI headers missing).\033[0m"
   exit 1
 fi
 echo -e "🧩 BakaSU kernel version code: $BAKASU_KERNEL_VERSION (manager minimum: ${BAKASU_MIN_KERNEL:-unknown})"
