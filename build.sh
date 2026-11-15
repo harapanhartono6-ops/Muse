@@ -43,7 +43,7 @@ fi
 KERNEL_NAME="Astra-thenoah77-"
 DEVICE="RMX2061"
 VARIANT="perf"
-BUILD_TYPE="nonKSU"
+BUILD_TYPE="BakaSU"
 VERSION_NUMBER="v1.0.1"
 
 DATE=$(date +%Y%m%d)
@@ -101,6 +101,44 @@ aarch64-linux-gcc --version | head -n 1
 echo -e "\n📱 \033[1;32mTarget Device: $DEVICE\033[0m"
 echo -e "🧵 \033[1;36mParallel build jobs: $JOBS\033[0m"
 
+# =====================[ BAKASU ]=====================
+
+# BakaSU lives in the KernelSU/ git submodule (drivers/kernelsu is a symlink to
+# KernelSU/kernel). Its Kbuild refuses to build without KernelSU/.git and
+# derives the version code the manager checks from `git rev-list --count`,
+# so a shallow (depth 1) submodule would report a bogus, too-old version.
+echo -e "\n🧩 \033[1;36mPreparing BakaSU submodule...\033[0m"
+if [ ! -e "$KERNEL_ROOT/KernelSU/.git" ]; then
+  git -C "$KERNEL_ROOT" submodule update --init KernelSU || {
+    echo -e "\n❌ \033[1;31mFailed to fetch the BakaSU submodule.\033[0m"
+    exit 1
+  }
+fi
+if [ "$(git -C "$KERNEL_ROOT/KernelSU" rev-parse --is-shallow-repository)" = "true" ]; then
+  git -C "$KERNEL_ROOT/KernelSU" fetch --unshallow --tags origin || {
+    echo -e "\n❌ \033[1;31mFailed to unshallow the BakaSU submodule.\033[0m"
+    exit 1
+  }
+fi
+
+# The kernel side must be at least as new as the manager expects, so by default
+# build against the newest BakaSU (main) to match the latest nightly manager.
+# BAKASU_REF=pinned keeps the commit recorded in this repo; any other value is
+# a BakaSU branch, tag or commit.
+BAKASU_REF="${BAKASU_REF:-main}"
+if [ "$BAKASU_REF" != "pinned" ]; then
+  git -C "$KERNEL_ROOT/KernelSU" fetch --tags origin "$BAKASU_REF" &&
+    git -C "$KERNEL_ROOT/KernelSU" checkout -q --detach FETCH_HEAD || {
+      echo -e "\n❌ \033[1;31mFailed to check out BakaSU ref: $BAKASU_REF\033[0m"
+      exit 1
+    }
+fi
+echo "BakaSU: $BAKASU_REF -> $(git -C "$KERNEL_ROOT/KernelSU" describe --tags --always) ($(git -C "$KERNEL_ROOT/KernelSU" rev-list --count HEAD) commits)"
+
+# Lowest kernel version code the manager from this same BakaSU checkout accepts.
+BAKASU_MIN_KERNEL=$(grep -rhoE 'MINIMAL_SUPPORTED_KERNEL = [0-9]+' \
+  "$KERNEL_ROOT/KernelSU/manager" --include=Natives.kt 2>/dev/null | grep -oE '[0-9]+$' | head -n1)
+
 # =====================[ DEFCONFIG ]=====================
 
 echo -e "\n📄 \033[1;36mSetting up defconfig...\033[0m"
@@ -118,6 +156,8 @@ required_configs=(
   CONFIG_NET_ACT_POLICE CONFIG_NET_CLS_MATCHALL CONFIG_NET_SCH_TBF
   CONFIG_PLAYSTATION_FF CONFIG_RD_LZ4 CONFIG_SHADOW_CALL_STACK
 )
+# BakaSU must stay enabled in manual-hook mode on this non-GKI kernel.
+required_configs+=(CONFIG_KSU CONFIG_KSU_MANUAL_HOOK)
 for config in "${required_configs[@]}"; do
   if ! grep -qx "$config=y" "$OUT_DIR/.config"; then
     echo -e "\n❌ \033[1;31mRequired kernel config missing: $config\033[0m"
@@ -162,6 +202,18 @@ if [ ! -f "$KERNEL_IMG" ]; then
 fi
 
 echo -e "\n✅ \033[1;32mKernel image compiled successfully.\033[0m"
+
+# The BakaSU Kbuild prints the version code it baked into the kernel.
+BAKASU_KERNEL_VERSION=$(grep -oE -- '-- BakaSU version code: [0-9]+' "$OUT_DIR/build.log" | grep -oE '[0-9]+$' | tail -n1)
+if [ -z "$BAKASU_KERNEL_VERSION" ]; then
+  echo -e "\n❌ \033[1;31mBakaSU was not built into the kernel (no version code in build.log).\033[0m"
+  exit 1
+fi
+echo -e "🧩 BakaSU kernel version code: $BAKASU_KERNEL_VERSION (manager minimum: ${BAKASU_MIN_KERNEL:-unknown})"
+if [ -n "$BAKASU_MIN_KERNEL" ] && [ "$BAKASU_KERNEL_VERSION" -lt "$BAKASU_MIN_KERNEL" ]; then
+  echo -e "\n❌ \033[1;31mBakaSU kernel version $BAKASU_KERNEL_VERSION is older than the manager minimum $BAKASU_MIN_KERNEL.\033[0m"
+  exit 1
+fi
 
 # =====================[ PACKAGING ]=====================
 

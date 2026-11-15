@@ -4,10 +4,16 @@ on:
   push:
     branches:
       - astra
+      - bakaKsu
       - mcqueen-ksu
       - mcqueen
   pull_request:
   workflow_dispatch:
+    inputs:
+      bakasu_ref:
+        description: "BakaSU branch/tag/commit to build (\"pinned\" = submodule commit)"
+        required: false
+        default: main
 
 jobs:
   build:
@@ -16,12 +22,18 @@ jobs:
       contents: read
     env:
       CCACHE_DIR: ~/.ccache
+      # Push/PR builds track BakaSU main so the kernel matches the latest manager.
+      BAKASU_REF: ${{ github.event.inputs.bakasu_ref || 'main' }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # BakaSU is the KernelSU/ submodule; build.sh unshallows it so the
+          # KernelSU version code (git rev-list --count) is correct.
+          submodules: true
 
       - name: Install dependencies
         run: |
