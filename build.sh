@@ -5,11 +5,32 @@
 # ============================================================
 
 # Paths
+NEUTRON_DIR=~/toolchains/neutron-clang
 CLANG_DIR=~/toolchains/clang
 GCC_DIR=~/toolchains/gcc-aarch64-linux-gnu-9.3
 ANYKERNEL_DIR=~/AnyKernel3
 
-# Check Clang
+# Neutron Clang (primary compiler)
+if [ ! -d "$NEUTRON_DIR" ] || [ ! -x "$NEUTRON_DIR/bin/clang" ]; then
+  echo -e "\n🔍 \033[1;33mNeutron Clang toolchain not found. Setting up...\033[0m"
+  mkdir -p "$NEUTRON_DIR"
+  (
+    cd "$NEUTRON_DIR" || exit 1
+    if curl -sLO https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman; then
+      chmod +x antman
+      ./antman -S
+    fi
+  )
+fi
+
+if [ -d "$NEUTRON_DIR" ] && [ -x "$NEUTRON_DIR/bin/clang" ]; then
+  export NEUTRON_CLANG=1
+  echo -e "\n✅ \033[1;32mNeutron Clang toolchain ready.\033[0m"
+else
+  echo -e "\n⚠️  \033[1;33mNeutron Clang not available, falling back to AOSP Clang.\033[0m"
+fi
+
+# Check AOSP Clang (fallback)
 if [ ! -d "$CLANG_DIR" ]; then
   echo -e "\n🔍 \033[1;33mClang toolchain not found. Cloning...\033[0m"
   git clone --depth=1 --branch lineage-20.0 \
@@ -36,6 +57,20 @@ else
 fi
 
 # ============================================================
+# BakaSU + SUSFS integration
+# ============================================================
+KERNEL_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [ ! -f "$KERNEL_ROOT/fs/susfs.c" ]; then
+  echo -e "\n🔌 \033[1;33mSUSFS not integrated yet — running setup_bakasu_susfs.sh...\033[0m"
+  bash "$KERNEL_ROOT/setup_bakasu_susfs.sh" || {
+    echo -e "\n❌ \033[1;31mBakaSU/SUSFS setup failed. Check the errors above.\033[0m"
+    exit 1
+  }
+else
+  echo -e "\n✅ \033[1;32mBakaSU + SUSFS already integrated.\033[0m"
+fi
+
+# ============================================================
 # Build Script
 # ============================================================
 
@@ -52,8 +87,12 @@ BASE_ZIPNAME="${KERNEL_NAME}-${VARIANT}-${DEVICE}-${BUILD_TYPE}-${TIME}-${DATE}-
 ZIPNAME="${BASE_ZIPNAME}.zip"
 
 # Paths
-export KERNEL_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-export CLANG_PATH=$CLANG_DIR
+export KERNEL_ROOT="$KERNEL_ROOT"
+if [ -n "${NEUTRON_CLANG:-}" ]; then
+  export CLANG_PATH=$NEUTRON_DIR
+else
+  export CLANG_PATH=$CLANG_DIR
+fi
 export GCC_PATH=$GCC_DIR
 export ANYKERNEL_DIR=$ANYKERNEL_DIR
 export OUT_DIR=out
@@ -61,7 +100,10 @@ export OUT_DIR=out
 export PATH=$CLANG_PATH/bin:$GCC_PATH/bin:$PATH
 export ARCH=arm64
 export CLANG_TRIPLE=aarch64-linux-gnu-
-export CROSS_COMPILE=aarch64-linux-
+export CROSS_COMPILE=aarch64-linux-gnu-
+# Neutron clang bundles its own binutils for aarch64; 32-bit compat build
+# (if the kernel supports it) uses the arm binutils that ship with it too.
+export CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
 
 # Allow constrained builders to lower parallelism without editing this script.
 JOBS="${JOBS:-$(nproc)}"
@@ -96,7 +138,11 @@ ccache -C > /dev/null 2>&1
 
 echo -e "\n🔧 \033[1;36mCompiler Info:\033[0m"
 clang --version | head -n 1
-aarch64-linux-gcc --version | head -n 1
+if command -v aarch64-linux-gnu-gcc > /dev/null 2>&1; then
+  aarch64-linux-gnu-gcc --version | head -n 1
+else
+  echo "(no standalone aarch64 gcc on PATH — using Neutron Clang's bundled binutils)"
+fi
 
 echo -e "\n📱 \033[1;32mTarget Device: $DEVICE\033[0m"
 echo -e "🧵 \033[1;36mParallel build jobs: $JOBS\033[0m"
@@ -141,6 +187,7 @@ make -j"$JOBS" O=$OUT_DIR \
   STRIP=llvm-strip \
   CLANG_TRIPLE=$CLANG_TRIPLE \
   CROSS_COMPILE=$CROSS_COMPILE \
+  CROSS_COMPILE_COMPAT=$CROSS_COMPILE_COMPAT \
   2>&1 | tee out/build.log | grep --line-buffered -E \
   "warning:|error:|fatal:|Killed|No space left|Segmentation fault|clang:.*(unable|crash)|make(\[[0-9]+\])?: \*\*\*" | sed \
   -e 's/warning:/\x1b[1;33mwarning:\x1b[0m/g' \

@@ -125,3 +125,14 @@ all.config
 # fetched Android config fragments
 kernel/configs/android-*.cfg
 
+
+# BakaSU / SUSFS integration artifacts
+KernelSU/
+.susfs_src/
+drivers/kernelsu
+drivers/KernelSU
+fs/susfs.c
+include/linux/susfs.h
+*.rej
+*.orig
+out/
