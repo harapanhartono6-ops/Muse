@@ -33,7 +33,9 @@ echo "[+] BakaSU: $(git -C "$BAKA_DIR" describe --always)"
 DRIVER_DIR="$ROOT/drivers"
 [ -d "$ROOT/common/drivers" ] && DRIVER_DIR="$ROOT/common/drivers"
 rm -f "$DRIVER_DIR/kernelsu"
-ln -s "$(basename "$BAKA_DIR")" "$DRIVER_DIR/kernelsu"
+# BakaSU's kernel source lives in KernelSU/kernel/; the build expects a
+# drivers/kernelsu directory that resolves there (Kconfig + Kbuild/obj).
+ln -s "$(basename "$BAKA_DIR")/kernel" "$DRIVER_DIR/kernelsu"
 
 # Link the SUSFS inline-hook wiring is already in-tree; ensure the Kconfig
 # symbols BakaSU's Kbuild expects are all defined.
