@@ -17,7 +17,6 @@ jobs:
     env:
       CCACHE_DIR: ~/.ccache
       BAKA_REF: main
-      SUSFS_REF: master
 
     steps:
       - name: Checkout
@@ -47,8 +46,8 @@ jobs:
           restore-keys: |
             kernel-tools-neutron-
 
-      - name: Integrate BakaSU + SUSFS
-        run: bash ./setup_bakasu_susfs.sh "$BAKA_REF" "$SUSFS_REF"
+      - name: Integrate BakaSU (SUSFS v2.3.0 is in-tree)
+        run: bash ./setup_bakasu_susfs.sh "$BAKA_REF"
 
       - name: Build kernel (Neutron Clang, fallback AOSP Clang)
         run: bash ./build.sh

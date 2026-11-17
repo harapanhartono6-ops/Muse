@@ -126,13 +126,10 @@ all.config
 kernel/configs/android-*.cfg
 
 
-# BakaSU / SUSFS integration artifacts
+# BakaSU integration artifacts
 KernelSU/
-.susfs_src/
 drivers/kernelsu
 drivers/KernelSU
-fs/susfs.c
-include/linux/susfs.h
 *.rej
 *.orig
 out/
