@@ -66,6 +66,20 @@
 #include <linux/susfs_def.h>
 #endif
 
+#ifdef CONFIG_KSU_SUSFS
+/* KernelSU entry points (defined in BakaSU feature/sucompat.c under
+ * CONFIG_KSU_SUSFS). Declared at file scope so every call site below sees a
+ * prototype; the tree builds with -Werror-implicit-function-declaration. */
+extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
+				void *argv, void *envp, int *flags);
+extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
+				void *argv, void *envp, int *flags, int *retval);
+extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+				void *argv, void *envp, int *flags);
+extern int ksu_handle_post_execveat_sucompat(int *fd, struct filename **filename_ptr,
+				void *argv, void *envp, int *flags, int *retval);
+#endif
+
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1731,6 +1745,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 extern int oplus_exec_block(struct file *file);
 #endif /* CONFIG_OPLUS_EXECVE_BLOCK or CONFIG_OPLUS_EXECVE_REPORT */
 #endif /* CONFIG_OPLUS_SECURE_GUARD */
+
 /*
  * sys_execve() executes a new program.
  */
@@ -1939,14 +1954,6 @@ out_ret:
 	return retval;
 }
 
-#ifdef CONFIG_KSU
-__attribute__((hot))
-extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
-				void *argv, void *envp, int *flags);
-__attribute__((hot))
-extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
-				void *argv, void *envp, int *flags, int *retval);
-#endif
 static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr argv,
 			      struct user_arg_ptr envp,
