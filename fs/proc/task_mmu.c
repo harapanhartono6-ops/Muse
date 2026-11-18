@@ -870,7 +870,7 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 	if (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
-		return;
+		return 0;
 #endif
 
 	smaps_walk.private = mss;
