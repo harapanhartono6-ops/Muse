@@ -81,6 +81,10 @@ VARIANT=""
 BUILD_TYPE="KSU"
 VERSION_NUMBER="v1"
 
+# Build identity shown in `uname -a` (user@host). Override via env if needed.
+export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-Kitshune}"
+export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-musev1}"
+
 DATE=$(date +%Y%m%d)
 TIME=$(date +%H%M)
 BASE_ZIPNAME="${KERNEL_NAME}-${VARIANT}-${DEVICE}-${BUILD_TYPE}-${TIME}-${DATE}-${VERSION_NUMBER}"
