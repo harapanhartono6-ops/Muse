@@ -6,6 +6,7 @@
 #include <linux/bitmap.h>
 #include <linux/string.h>
 #include <linux/version.h>
+#include <linux/cred.h>
 
 /********/
 /* ENUM */
