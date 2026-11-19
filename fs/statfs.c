@@ -101,6 +101,16 @@ bypass_orig_flow:
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 
+int statfs_by_dentry_wrapper(struct dentry *dentry, struct kstatfs *buf)
+{
+	return statfs_by_dentry(dentry, buf);
+}
+
+int calculate_f_flags_wrapper(struct vfsmount *mnt)
+{
+	return calculate_f_flags(mnt);
+}
+
 int vfs_statfs(const struct path *path, struct kstatfs *buf)
 {
 	int error;
