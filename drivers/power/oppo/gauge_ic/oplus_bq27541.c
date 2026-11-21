@@ -1180,18 +1180,20 @@ static int bq27541_get_battery_soc(void)
 	if (atomic_read(&gauge_ic->suspended) == 1) {
 		return gauge_ic->soc_pre;
 	}
-	if (oplus_vooc_get_allow_reading() == true) {
-		ret = bq27541_read_i2c(gauge_ic->cmd_addr.reg_soc, &soc);
-		if (ret) {
-			dev_err(gauge_ic->dev, "error reading soc.ret:%d\n", ret);
-			goto read_soc_err;
-		}
-	} else {
-		if (gauge_ic->soc_pre) {
-			return gauge_ic->soc_pre;
-		} else {
-			return 0;
-		}
+	/*
+	 * Muse fix: always read the real SOC from the gauge when we are not
+	 * suspended, instead of returning the cached soc_pre whenever
+	 * allow_reading() is false. During normal screen-on discharging
+	 * allow_reading() is false, so the cached value froze chip->soc and the
+	 * displayed percentage never dropped until the screen resumed. A fresh
+	 * I2C read on every poll keeps the battery percentage moving in real
+	 * time. (The suspended check above still returns soc_pre during sleep,
+	 * where the I2C bus is not available.)
+	 */
+	ret = bq27541_read_i2c(gauge_ic->cmd_addr.reg_soc, &soc);
+	if (ret) {
+		dev_err(gauge_ic->dev, "error reading soc.ret:%d\n", ret);
+		goto read_soc_err;
 	}
 	soc = bq27541_soc_calibrate(soc);
 	return soc;
