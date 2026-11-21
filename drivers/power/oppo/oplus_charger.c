@@ -6116,8 +6116,6 @@ static void oplus_chg_update_ui_soc(struct oplus_chg_chip *chip)
 	static int cnt = 0;
 	int soc_down_limit = 0;
 	int soc_up_limit = 0;
-	unsigned long sleep_tm = 0;
-	unsigned long soc_reduce_margin = 0;
 	bool vbatt_too_low = false;
 	vbatt_lowerthan_3300mv = false;
 
@@ -6232,36 +6230,17 @@ static void oplus_chg_update_ui_soc(struct oplus_chg_chip *chip)
 		cnt = 0;
 		chip->prop_status = POWER_SUPPLY_STATUS_DISCHARGING;
 		soc_up_count = 0;
-		if (chip->smooth_soc <= chip->ui_soc || vbatt_too_low) {
-			if (soc_down_count > soc_down_limit) {
-				soc_down_count = soc_down_limit + 1;
-			} else {
-				soc_down_count++;
-			}
-			sleep_tm = chip->sleep_tm_sec;
-			if (chip->sleep_tm_sec > 0) {
-				soc_reduce_margin = chip->sleep_tm_sec / TEN_MINUTES;
-				if (soc_reduce_margin == 0) {
-					if ((chip->ui_soc - chip->smooth_soc) > 2) {
-						chip->ui_soc--;
-						soc_down_count = 0;
-						chip->sleep_tm_sec = 0;
-					}
-				} else if (soc_reduce_margin < (chip->ui_soc - chip->smooth_soc)) {
-					chip->ui_soc -= soc_reduce_margin;
-					soc_down_count = 0;
-					chip->sleep_tm_sec = 0;
-				} else if (soc_reduce_margin >= (chip->ui_soc - chip->smooth_soc)) {
-					chip->ui_soc = chip->smooth_soc;
-					soc_down_count = 0;
-					chip->sleep_tm_sec = 0;
-				}
-			}
-			if (soc_down_count >= soc_down_limit && (chip->smooth_soc < chip->ui_soc || vbatt_too_low)) {
-				chip->sleep_tm_sec = 0;
-				soc_down_count = 0;
-				chip->ui_soc--;
-			}
+		if (chip->soc < chip->ui_soc || vbatt_too_low) {
+			/*
+			 * Custom fix: display the real fuel-gauge SOC immediately instead
+			 * of rate-limiting the drop to one point every 40-300 seconds. The
+			 * OPPO "smooth-down" made the percentage look stuck while the
+			 * screen was on, then jump on screen wake. Now the shown battery
+			 * percentage tracks the actual drain in real time.
+			 */
+			chip->ui_soc = chip->soc;
+			chip->sleep_tm_sec = 0;
+			soc_down_count = 0;
 		}
 	}
 	if (chip->ui_soc < 2) {
