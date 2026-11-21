@@ -992,6 +992,14 @@ static int sugov_init(struct cpufreq_policy *policy)
 				cpufreq_policy_transition_delay_us(policy);
 	tunables->down_rate_limit_us =
 				cpufreq_policy_transition_delay_us(policy);
+	/*
+	 * Muse battery tweak: raise the schedutil up-rate limit so the governor
+	 * is less eager to jump to a higher CPU frequency. Fewer frequency
+	 * spikes while idling / browsing / gaming means less wasted energy and
+	 * cooler battery. down_rate is left responsive so the CPU still drops
+	 * frequency quickly under light load.
+	 */
+	tunables->up_rate_limit_us += 1000;
 	tunables->hispeed_load = DEFAULT_HISPEED_LOAD;
 	tunables->hispeed_freq = 0;
 
