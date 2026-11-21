@@ -433,7 +433,10 @@
 		status = "ok";
 		compatible = "oplus,bq27541-battery";
 		reg = <0x55>;
-		qcom,modify-soc-smooth;
+		/* Muse fix: disable chip-level SOC smoothing (CC_DEAD_BAND) which
+		 * held the gauge SOC so the displayed percentage froze while the
+		 * screen was on and only jumped after screen off/on. */
+		//qcom,modify-soc-smooth;
 	};
 
 	stm8s_fastcg@26 {
